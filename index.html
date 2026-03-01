@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mr.Dwich - Fast Food Restaurant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --spice-orange: #ff6b00;
+            --spice-light: #fff9f2;
+        }
+        
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: white;
+            color: #333;
+        }
+        
+        .bg-spice-orange { background-color: var(--spice-orange); }
+        .text-spice-orange { color: var(--spice-orange); }
+        .bg-spice-light { background-color: var(--spice-light); }
+        .card-shadow { box-shadow: 0 25px 50px -12px rgba(255, 107, 0, 0.15); }
+        .input-spice { @apply w-full px-5 py-4 border-2 border-gray-100 rounded-2xl focus:border-spice-orange outline-none transition; }
+        .nav-link.active { color: var(--spice-orange); }
+        
+        /* FIX CRÍTICO: Asegura que las vistas ocultas no sean mostradas por Flexbox */
+        .vista:not(.activa) { display: none !important; }
+        .vista.activa { display: block; }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.abierto {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .modal-box {
+            background: white;
+            border-radius: 2rem;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.abierto .modal-box {
+            transform: translateY(0);
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            font-weight: bold;
+            z-index: 2000;
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .toast.mostrar {
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease forwards;
+        }
+        
+        .producto-imagen {
+            transition: transform 0.3s ease;
+        }
+        
+        .producto:hover .producto-imagen {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-800">
+
+<nav class="container mx-auto px-6 py-5 flex justify-between items-center fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md z-50 shadow-sm">
+    <button onclick="mostrarVista('home')" class="flex items-center transition hover:opacity-80">
+        <img src="https://i.postimg.cc/YqP8YCPc/MR.png" alt="Logo" class="h-12 w-auto object-contain">
+    </button>
+    
+    <ul class="hidden md:flex space-x-10 font-medium items-center">
+        <li><button onclick="mostrarVista('home')" class="nav-link hover:text-spice-orange transition" data-vista="home">Inicio</button></li>
+        <li><button onclick="mostrarVista('menu')" class="nav-link hover:text-spice-orange transition" data-vista="menu">Menú</button></li>
+        <li><button onclick="mostrarVista('ofertas')" class="nav-link hover:text-spice-orange transition" data-vista="ofertas">Nuestra App</button></li>
+        <li><button onclick="mostrarVista('contacto')" class="nav-link hover:text-spice-orange transition" data-vista="contacto">Contacto</button></li>
+    </ul>
+
+    <div class="flex items-center space-x-5">
+        <button id="btn-carrito" onclick="abrirCarrito()" class="relative" title="Ver carrito">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+            </svg>
+            <span id="carrito-contador" class="absolute -top-2 -right-2 bg-spice-orange text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">0</span>
+        </button>
+        <button id="btn-login" onclick="mostrarVista('login')" class="bg-gray-900 text-white px-6 py-2 rounded-full font-bold hover:bg-spice-orange transition">Login</button>
+        <button id="btn-admin" onclick="mostrarVista('admin')" class="bg-spice-orange text-white px-6 py-2 rounded-full font-bold hidden hover:opacity-90 transition">Admin</button>
+    </div>
+</nav>
+
+<div id="vista-home" class="vista activa fade-in">
+    <section id="inicio" class="relative pt-32 pb-20 bg-spice-light overflow-hidden min-h-screen flex items-center">
+        <div class="container mx-auto px-6 grid md:grid-cols-2 gap-10 items-center">
+            <div class="relative z-10">
+                <span class="bg-orange-100 text-spice-orange px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider">¡El más rápido en la ciudad!</span>
+                <h1 class="text-6xl md:text-8xl font-black leading-tight mt-6 mb-8 text-gray-900">
+                    Buenos <br> <span class="text-spice-orange">Sándwiches</span> Buenos <br> <span class="text-spice-orange">Momentos</span>
+                </h1>
+                <p class="text-gray-500 text-xl max-w-md mb-8 leading-relaxed">
+                    Sándwiches frescos con un sabor inigualable.
+                </p>
+                <div class="flex flex-wrap gap-4">
+                    <button onclick="mostrarVista('menu')" class="bg-spice-orange text-white px-10 py-4 rounded-full font-bold shadow-lg shadow-orange-200 hover:scale-105 transition transform">
+                        Ver Menú
+                    </button>
+                    <button onclick="abrirModalProceso()" class="flex items-center space-x-3 group">
+                        <span class="bg-white p-4 rounded-full shadow-md group-hover:bg-spice-orange group-hover:text-white transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                            </svg>
+                        </span>
+                        <span class="font-bold">Ver Proceso</span>
+                    </button>
+                </div>
+            </div>
+            <div class="relative flex justify-center">
+                <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&amp;fit=crop&amp;q=80&amp;w=800" alt="Burger" class="w-full h-auto drop-shadow-2xl hero-img">
+                <div class="absolute top-10 right-0 bg-white p-4 rounded-2xl shadow-xl flex items-center space-x-3 animate-pulse">
+                    <div class="bg-green-100 p-2 rounded-full text-green-600">★</div>
+                    <div>
+                        <p class="text-xs text-gray-400">Rating</p>
+                        <p class="font-bold">4.9 (2k Reseñas)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div id="vista-menu" class="vista pt-32 pb-20 bg-spice-light min-h-screen">
+    <div class="container mx-auto px-6 max-w-2xl">
+        <h2 class="text-5xl font-black mb-10 text-center italic">¿Qué vas a pedir hoy?</h2>
+        
+        <div class="flex flex-col gap-6">
+            <button onclick="filtrarCategoria('todos', 'Menú Completo')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <span class="text-4xl">⭐</span>
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Ver Todo</span>
+                    <span class="text-gray-500 text-sm">Explora todos nuestros productos</span>
+                </div>
+            </button>
+
+            <button onclick="filtrarCategoria('hamburguesa', 'Hamburguesas')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=200" alt="Hamburguesas" class="w-full h-full object-cover">
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Hamburguesas</span>
+                    <span class="text-gray-500 text-sm">Las mejores de la ciudad</span>
+                </div>
+            </button>
+
+            <button onclick="filtrarCategoria('pizza', 'Pizzas')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <img src="https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=200" alt="Pizzas" class="w-full h-full object-cover">
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Pizzas</span>
+                    <span class="text-gray-500 text-sm">Crujientes y llenas de queso</span>
+                </div>
+            </button>
+
+            <button onclick="filtrarCategoria('bebidas', 'Bebidas')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <img src="https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=200" alt="Bebidas" class="w-full h-full object-cover">
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Bebidas</span>
+                    <span class="text-gray-500 text-sm">Refrescantes y frías</span>
+                </div>
+            </button>
+
+            <button onclick="filtrarCategoria('snacks', 'Snacks')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <img src="https://images.unsplash.com/photo-1576107232684-1279f390859f?auto=format&fit=crop&q=80&w=200" alt="Snacks" class="w-full h-full object-cover">
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Snacks</span>
+                    <span class="text-gray-500 text-sm">Perfectos para acompañar</span>
+                </div>
+            </button>
+            
+            <button onclick="filtrarCategoria('sandwiches', 'Sándwiches')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <img src="https://i.postimg.cc/9MyCqBjz/Maqueta-de-presentacin-profesional-estilo-mrdwich-delpmaspu.jpg" alt="Sandwiches" class="w-full h-full object-cover">
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Sándwiches</span>
+                    <span class="text-gray-500 text-sm">Nuestra especialidad</span>
+                </div>
+            </button>
+
+            <button onclick="filtrarCategoria('postres', 'Postres')" class="bg-white border-2 border-transparent rounded-[2.5rem] p-6 flex items-center shadow-sm hover:border-spice-orange hover:shadow-md transition w-full group">
+                <div class="bg-gray-50 w-24 h-24 rounded-full flex items-center justify-center overflow-hidden mr-6 flex-shrink-0 group-hover:scale-105 transition transform">
+                    <img src="https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&q=80&w=200" alt="Postres" class="w-full h-full object-cover">
+                </div>
+                <div class="text-left">
+                    <span class="font-black text-2xl text-gray-800 block mb-1">Postres</span>
+                    <span class="text-gray-500 text-sm">Un dulce final</span>
+                </div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="vista-productos" class="vista pt-32 pb-20 bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-6">
+        <div class="flex items-center mb-12">
+            <button onclick="mostrarVista('menu')" class="bg-white p-4 rounded-full shadow-sm mr-6 hover:text-spice-orange hover:shadow-md transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            </button>
+            <h2 id="titulo-categoria" class="text-4xl md:text-5xl font-black italic">Productos</h2>
+        </div>
+        <div id="productos-container" class="grid md:grid-cols-3 gap-10"></div>
+    </div>
+</div>
+
+<div id="vista-ofertas" class="vista pt-28 pb-20">
+    <section class="container mx-auto px-6">
+        <div class="bg-gray-900 rounded-[4rem] p-12 md:p-24 flex flex-col md:flex-row items-center justify-between text-white overflow-hidden relative">
+            <div class="md:w-1/2 relative z-10">
+                <h2 class="text-5xl md:text-6xl font-black mb-8 italic">Descarga Nuestra App</h2>
+                <p class="text-gray-400 text-lg mb-10 leading-relaxed">Pide tu comida favorita con solo un clic y recibe descuentos exclusivos todos los días.</p>
+                <div class="flex space-x-4">
+                    <button onclick="window.open('https://apps.apple.com/', '_blank')" class="hover:scale-105 transition">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/3/3c/Download_on_the_App_Store_Badge.svg" class="h-12" alt="App Store">
+                    </button>
+                    <button onclick="window.open('https://play.google.com/', '_blank')" class="hover:scale-105 transition">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" class="h-12" alt="Google Play">
+                    </button>
+                </div>
+            </div>
+            <div class="md:w-1/2 mt-12 md:mt-0 relative flex justify-center">
+                <div class="bg-spice-orange h-[400px] w-[400px] absolute rounded-full blur-[100px] opacity-20"></div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div id="vista-contacto" class="vista pt-28 pb-20 bg-spice-light px-4 min-h-screen">
+    <div class="max-w-3xl mx-auto">
+        <div class="flex items-center gap-3 mb-10">
+            <h1 class="text-4xl font-black text-gray-800 italic">Contacto</h1>
+        </div>
+        <div class="bg-white rounded-[2.5rem] p-10 card-shadow">
+            <div class="text-center mb-8"><span class="text-7xl">📞</span><h2 class="text-3xl font-black mt-4">Escríbenos</h2></div>
+            <div class="grid md:grid-cols-2 gap-8">
+                <form onsubmit="enviarContacto(event)" class="space-y-4">
+                    <input type="text" id="nombre-contacto" placeholder="Tu nombre" required="" class="input-spice">
+                    <input type="email" id="email-contacto" placeholder="Tu correo" required="" class="input-spice">
+                    <textarea rows="4" id="mensaje-contacto" placeholder="Tu mensaje" required="" class="input-spice resize-none"></textarea>
+                    <button type="submit" class="w-full bg-spice-orange text-white py-3 rounded-full font-bold hover:opacity-90 transition">Enviar mensaje</button>
+                </form>
+                <div class="space-y-4">
+                    <div class="bg-gray-50 rounded-2xl p-5"><p class="font-bold mb-1">📧 Email</p><p class="text-spice-orange">info@spice.com</p></div>
+                    <div class="bg-gray-50 rounded-2xl p-5"><p class="font-bold mb-1">📞 Teléfono</p><p class="text-spice-orange">+1 234 567 890</p></div>
+                    <div class="bg-gray-50 rounded-2xl p-5"><p class="font-bold mb-1">📍 Dirección</p><p class="text-gray-500">Cali, Valle del Cauca, Colombia</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="vista-historia" class="vista pt-32 pb-20 bg-spice-light px-4 min-h-screen">
+    <div class="max-w-4xl mx-auto bg-white rounded-[2.5rem] p-10 card-shadow">
+        <h1 class="text-5xl font-black text-gray-800 italic mb-6">Nuestra Historia</h1>
+        <p class="text-gray-600 text-lg leading-relaxed mb-4">Todo comenzó en un pequeño local de la ciudad. Nuestro fundador decidió crear un espacio donde "rápido" no significara "menor calidad".</p>
+        <p class="text-gray-600 text-lg leading-relaxed">Hoy en día, Spice Restaurant (Mr.Dwich) se ha convertido en un referente de innovación culinaria, fusionando ingredientes locales con técnicas internacionales.</p>
+    </div>
+</div>
+
+<div id="vista-blog" class="vista pt-32 pb-20 bg-gray-50 px-4 min-h-screen">
+    <div class="max-w-5xl mx-auto">
+        <h1 class="text-5xl font-black text-gray-800 italic mb-10 text-center">Nuestro Blog</h1>
+        <div class="grid md:grid-cols-2 gap-8">
+            <div class="bg-white rounded-[2rem] p-6 card-shadow">
+                <h3 class="text-2xl font-bold mb-3">El secreto de nuestra masa</h3>
+                <p class="text-gray-500 mb-4">Descubre por qué nuestras pizzas tienen ese toque crujiente perfecto...</p>
+            </div>
+            <div class="bg-white rounded-[2rem] p-6 card-shadow">
+                <h3 class="text-2xl font-bold mb-3">Top 5 Sándwiches para este Verano</h3>
+                <p class="text-gray-500 mb-4">Te presentamos las opciones más refrescantes y deliciosas.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="vista-delivery" class="vista pt-32 pb-20 bg-spice-light px-4 min-h-screen">
+    <div class="max-w-3xl mx-auto bg-white rounded-[2.5rem] p-10 card-shadow text-center">
+        <span class="text-7xl block mb-6">🛵</span>
+        <h1 class="text-4xl font-black text-gray-800 italic mb-4">Información de Delivery</h1>
+        <p class="text-gray-600 text-lg mb-8">Llegamos a tu casa en menos de 45 minutos. Nuestra zona de cobertura abarca toda el área metropolitana de Cali.</p>
+    </div>
+</div>
+
+<div id="vista-reserva" class="vista pt-32 pb-20 bg-gray-50 px-4 min-h-screen">
+    <div class="max-w-2xl mx-auto bg-white rounded-[2.5rem] p-10 card-shadow">
+        <h1 class="text-4xl font-black text-gray-800 italic mb-8 text-center">Reserva tu Mesa</h1>
+        <form onsubmit="event.preventDefault(); mostrarToast('Mesa reservada con éxito!'); mostrarVista('home');" class="space-y-4">
+            <input type="text" placeholder="A nombre de quién" required class="input-spice">
+            <input type="date" required class="input-spice">
+            <input type="time" required class="input-spice">
+            <input type="number" placeholder="Número de personas" min="1" required class="input-spice">
+            <button type="submit" class="w-full bg-spice-orange text-white py-4 rounded-full font-black text-lg hover:opacity-90 transition">Confirmar Reserva</button>
+        </form>
+    </div>
+</div>
+
+<div id="vista-login" class="vista pt-28 min-h-screen bg-spice-light flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-10">
+            <button onclick="mostrarVista('home')" class="text-4xl font-black italic tracking-tighter text-spice-orange">SPICE<span class="text-gray-900">.</span></button>
+            <p class="text-gray-400 mt-2 font-medium">Inicia sesión en tu cuenta</p>
+        </div>
+        <div class="bg-white rounded-[2.5rem] p-10 card-shadow">
+            <form onsubmit="validarLogin(event)" novalidate="">
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Correo electrónico</label>
+                    <input type="email" id="login-email" placeholder="correo@ejemplo.com" class="input-spice">
+                </div>
+                <div class="mb-8">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Contraseña</label>
+                    <div class="relative">
+                        <input type="password" id="login-password" placeholder="••••••••" class="input-spice pr-14">
+                        <button type="button" onclick="togglePasswordVisibility()" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-spice-orange transition text-xl">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-spice-orange text-white py-4 rounded-full font-black text-lg hover:opacity-90 transition">Ingresar</button>
+            </form>
+            <p class="text-center text-gray-400 mt-8 text-sm">¿No tienes cuenta? <button onclick="mostrarVista('registro')" class="text-spice-orange font-bold hover:underline">Regístrate gratis</button></p>
+        </div>
+        <div class="text-center mt-6"><button onclick="mostrarVista('home')" class="text-gray-400 text-sm hover:text-spice-orange">← Volver al inicio</button></div>
+    </div>
+</div>
+
+<div id="vista-registro" class="vista pt-28 min-h-screen bg-spice-light flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-10">
+            <button onclick="mostrarVista('home')" class="text-4xl font-black italic tracking-tighter text-spice-orange">SPICE<span class="text-gray-900">.</span></button>
+            <p class="text-gray-400 mt-2 font-medium">Crea tu cuenta gratis</p>
+        </div>
+        <div class="bg-white rounded-[2.5rem] p-10 card-shadow">
+            <form onsubmit="registrarse(event)" novalidate="" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Nombre completo</label>
+                    <input type="text" id="nombre-registro" placeholder="Tu nombre" required="" class="input-spice">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Correo electrónico</label>
+                    <input type="email" id="email-registro" placeholder="correo@ejemplo.com" required="" class="input-spice">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Contraseña</label>
+                    <input type="password" id="password-registro" placeholder="Mínimo 6 caracteres" required="" minlength="6" class="input-spice">
+                </div>
+                <button type="submit" class="w-full bg-spice-orange text-white py-4 rounded-full font-black text-lg hover:opacity-90 transition">Crear cuenta</button>
+            </form>
+            <p class="text-center text-gray-400 mt-8 text-sm">¿Ya tienes cuenta? <button onclick="mostrarVista('login')" class="text-spice-orange font-bold hover:underline">Inicia sesión</button></p>
+        </div>
+        <div class="text-center mt-6"><button onclick="mostrarVista('home')" class="text-gray-400 text-sm hover:text-spice-orange">← Volver al inicio</button></div>
+    </div>
+</div>
+
+<div id="vista-carrito" class="vista pt-28 min-h-screen bg-spice-light px-4 py-12">
+    <div class="max-w-2xl mx-auto">
+        <div class="flex items-center justify-between mb-10">
+            <h1 class="text-3xl font-black">Tu Carrito 🛒</h1>
+            <button onclick="mostrarVista('home')" class="text-gray-400 hover:text-spice-orange font-bold">X Cerrar</button>
+        </div>
+        <div id="lista-carrito" class="space-y-4 mb-8"></div>
+        <div id="carrito-vacio" class="hidden text-center py-20">
+            <div class="text-8xl mb-4">🛒</div>
+            <h2 class="text-2xl font-black text-gray-700 mb-2">Tu carrito está vacío</h2>
+            <button onclick="mostrarVista('menu')" class="bg-spice-orange text-white px-8 py-3 rounded-full font-bold hover:opacity-90 transition mt-4">Ver Menú</button>
+        </div>
+        <div id="resumen-carrito" class="bg-white rounded-[2rem] p-8 card-shadow hidden">
+            <div class="flex justify-between items-center mb-3 text-gray-500"><span>Subtotal</span><span id="subtotal-carrito">$0.00</span></div>
+            <div class="flex justify-between items-center mb-3 text-gray-500"><span>Delivery</span><span class="text-green-500 font-bold">GRATIS</span></div>
+            <div class="h-px bg-gray-100 my-4"></div>
+            <div class="flex justify-between items-center text-xl font-black mb-8"><span>Total</span><span id="total-carrito" class="text-spice-orange">$0.00</span></div>
+            <button onclick="realizarPedido()" class="w-full bg-spice-orange text-white py-4 rounded-full font-black text-lg hover:opacity-90 transition">Realizar Pedido</button>
+        </div>
+    </div>
+</div>
+
+<div id="vista-admin" class="vista pt-28 min-h-screen bg-spice-light px-4 py-12">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex items-center justify-between mb-10">
+            <h1 class="text-2xl font-black text-gray-700">Panel de Administración</h1>
+            <button onclick="cerrarSesion()" class="bg-gray-900 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-spice-orange transition">Cerrar Sesión</button>
+        </div>
+        
+        <div class="grid md:grid-cols-2 gap-8">
+            <div class="bg-white rounded-[2.5rem] p-10 card-shadow h-fit">
+                <h2 id="titulo-form-admin" class="text-2xl font-black mb-6">Agregar Nuevo Producto</h2>
+                <form id="form-agregar-producto" onsubmit="guardarProductoAdmin(event)" class="space-y-4">
+                    <input type="text" id="admin-prod-nombre" placeholder="Nombre del producto" required class="input-spice w-full">
+                    <input type="text" id="admin-prod-desc" placeholder="Descripción corta" required class="input-spice w-full">
+                    <input type="number" id="admin-prod-precio" step="0.01" placeholder="Precio ($)" required class="input-spice w-full">
+                    <input type="url" id="admin-prod-imagen" placeholder="URL de la imagen" required class="input-spice w-full">
+                    <input type="text" id="admin-prod-tiempo" placeholder="Tiempo de prep. (ej. 15 mins)" required class="input-spice w-full">
+                    <select id="admin-prod-categoria" required class="input-spice w-full">
+                        <option value="">Selecciona una categoría...</option>
+                        <option value="hamburguesa">Hamburguesa</option>
+                        <option value="pizza">Pizza</option>
+                        <option value="bebidas">Bebidas</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="postres">Postres</option>
+                        <option value="sandwiches">Sándwiches</option>
+                    </select>
+                    
+                    <button id="btn-submit-admin" type="submit" class="w-full bg-spice-orange text-white py-3 rounded-full font-bold hover:opacity-90 transition">Agregar Producto</button>
+                    <button type="button" onclick="cancelarEdicion()" id="btn-cancelar-edicion" class="w-full bg-gray-200 text-gray-700 py-3 rounded-full font-bold hover:bg-gray-300 transition hidden">Cancelar Edición</button>
+                </form>
+            </div>
+
+            <div class="bg-white rounded-[2.5rem] p-10 card-shadow">
+                <h2 class="text-2xl font-black mb-6">Tus Productos</h2>
+                <div id="lista-productos-admin" class="overflow-y-auto max-h-[500px] pr-2 space-y-4">
+                    </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-8"><button onclick="mostrarVista('home')" class="text-gray-400 text-sm hover:text-spice-orange">← Volver al inicio</button></div>
+    </div>
+</div>
+
+<footer id="footer-principal" class="bg-white pt-24 pb-12 border-t border-gray-100">
+    <div class="container mx-auto px-6 grid md:grid-cols-4 gap-12 mb-16">
+        <div>
+            <button onclick="mostrarVista('home')" class="flex items-center transition hover:opacity-80 mb-6">
+                <img src="https://i.postimg.cc/jjG1kFWT/Logo-Mr-Dwich.jpg" alt="Logo de Mr Dwich" class="h-10 w-auto object-contain">
+            </button>
+            <p class="text-gray-500 mb-8 leading-relaxed">Conectando los mejores sabores del mundo directamente con tu hogar.</p>
+            <div class="flex space-x-4">
+                <button onclick="window.open('https://facebook.com', '_blank')" class="h-10 w-10 bg-spice-light flex items-center justify-center rounded-full text-spice-orange font-bold hover:bg-spice-orange transition">f</button>
+                <button onclick="window.open('https://twitter.com', '_blank')" class="h-10 w-10 bg-spice-light flex items-center justify-center rounded-full text-spice-orange font-bold hover:bg-spice-orange transition">t</button>
+                <button onclick="window.open('https://instagram.com', '_blank')" class="h-10 w-10 bg-spice-light flex items-center justify-center rounded-full text-spice-orange font-bold hover:bg-spice-orange transition">i</button>
+            </div>
+        </div>
+        <div>
+            <h4 class="font-bold text-xl mb-8">Nosotros</h4>
+            <ul class="text-gray-500 space-y-4">
+                <li><button onclick="mostrarVista('historia')" class="hover:text-spice-orange transition">Nuestra Historia</button></li>
+                <li><button onclick="mostrarVista('blog')" class="hover:text-spice-orange transition">Blog</button></li>
+            </ul>
+        </div>
+        <div>
+            <h4 class="font-bold text-xl mb-8">Servicios</h4>
+            <ul class="text-gray-500 space-y-4">
+                <li><button onclick="mostrarVista('delivery')" class="hover:text-spice-orange transition">Delivery</button></li>
+                <li><button onclick="mostrarVista('reserva')" class="hover:text-spice-orange transition">Reserva de Mesas</button></li>
+            </ul>
+        </div>
+        <div>
+            <h4 class="font-bold text-xl mb-8">Contacto</h4>
+            <button onclick="mostrarVista('contacto')" class="text-gray-500 mb-4 block hover:text-spice-orange transition">info@spice.com</button>
+            <button onclick="mostrarToast('Llamando: +1 234 567 890')" class="text-gray-500 mb-2 block hover:text-spice-orange transition">+1 234 567 890</button>
+            <button onclick="mostrarVista('contacto')" class="text-gray-500 block hover:text-spice-orange transition">Cali, Valle del Cauca, Colombia</button>
+        </div>
+    </div>
+    <div class="text-center text-gray-400 border-t border-gray-100 pt-10">
+        © 2026 Spice Restaurant. Todos los derechos reservados.
+    </div>
+</footer>
+
+<div id="modal-proceso" class="modal-overlay" onclick="cerrarModalProceso(event)">
+    <div class="modal-box">
+        <button onclick="cerrarModalProceso()" class="absolute top-5 right-6 text-gray-400 hover:text-gray-900 text-3xl font-bold leading-none">×</button>
+        <h3 class="text-2xl font-black mb-2">Cómo preparamos tu comida</h3>
+        <p class="text-gray-400 mb-6 text-sm">Ingredientes frescos, manos expertas y amor por el sabor.</p>
+        <div class="bg-gray-100 rounded-2xl overflow-hidden aspect-video">
+            <iframe width="100%" height="100%" src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Proceso Spice" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen=""></iframe>
+        </div>
+        <button onclick="cerrarModalProceso()" class="mt-6 w-full bg-spice-orange text-white py-3 rounded-full font-bold hover:opacity-90 transition">Cerrar</button>
+    </div>
+</div>
+
+<div id="toast" class="toast hidden">🛒 <span id="toast-msg">Notificación</span></div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyB9Rxw2DrxycjKdQrzH0DB7j5-oyDKXjaM",
+        authDomain: "webuimrdwich.firebaseapp.com",
+        projectId: "webuimrdwich",
+        storageBucket: "webuimrdwich.firebasestorage.app",
+        messagingSenderId: "542714898159",
+        appId: "1:542714898159:web:5ad29c4d3872247dcd5d1a",
+        measurementId: "G-NPTP13F74D"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+
+    let carrito = [];
+    let usuarioActual = null;
+    let isAdmin = false;
+
+    // Aquí dejamos los productos "base" que ya tenías
+    let productosData = [
+        { id: 1, nombre: "Clásica Spice", descripcion: "Carne de res, lechuga, tomate, queso", precio: 12.50, imagen: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=400", categoria: "hamburguesa", rating: 4.8, tiempo: "15 mins" },
+        { id: 2, nombre: "Doble Bacon", descripcion: "Doble carne, tocino crujiente, queso cheddar", precio: 15.00, imagen: "https://images.unsplash.com/photo-1594221708779-94832f4320d1?auto=format&fit=crop&q=80&w=400", categoria: "hamburguesa", rating: 4.9, tiempo: "18 mins" },
+        { id: 3, nombre: "Pollo Crispy", descripcion: "Pechuga empanizada, mayonesa de ajo", precio: 11.00, imagen: "https://images.unsplash.com/photo-1615719413546-198b25453f85?auto=format&fit=crop&q=80&w=400", categoria: "hamburguesa", rating: 4.7, tiempo: "15 mins" },
+        
+        { id: 6, nombre: "Margarita XL", descripcion: "Salsa de tomate, mozzarella, albahaca", precio: 15.00, imagen: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=400", categoria: "pizza", rating: 4.9, tiempo: "25 mins" },
+        { id: 7, nombre: "Pepperoni Plus", descripcion: "Extra queso y doble porción de pepperoni", precio: 17.00, imagen: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&q=80&w=400", categoria: "pizza", rating: 4.8, tiempo: "25 mins" },
+        
+        { id: 11, nombre: "Limonada de Coco", descripcion: "Refrescante limonada con crema de coco natural", precio: 4.50, imagen: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=400", categoria: "bebidas", rating: 4.8, tiempo: "5 mins" },
+        
+        { id: 16, nombre: "Papas Fritas Clásicas", descripcion: "Crujientes, doradas y con el toque exacto de sal", precio: 4.00, imagen: "https://images.unsplash.com/photo-1576107232684-1279f390859f?auto=format&fit=crop&q=80&w=400", categoria: "snacks", rating: 4.8, tiempo: "10 mins" },
+        
+        { id: 21, nombre: "Brownie con Helado", descripcion: "Brownie caliente de chocolate oscuro con helado de vainilla", precio: 6.00, imagen: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&q=80&w=400", categoria: "postres", rating: 4.9, tiempo: "10 mins" },
+        
+        { id: 26, nombre: "Sándwich Cubano", descripcion: "Cerdo asado, jamón, queso suizo, mostaza y pepinillos", precio: 8.50, imagen: "https://images.unsplash.com/photo-1628191137573-dee64e727614?auto=format&fit=crop&q=80&w=400", categoria: "sandwiches", rating: 4.8, tiempo: "10 mins" },
+        { id: 27, nombre: "Pollo Pesto", descripcion: "Pechuga a la plancha, salsa pesto, tomate y mozzarella", precio: 7.50, imagen: "https://images.unsplash.com/photo-1619881589316-56c7f9e6b587?auto=format&fit=crop&q=80&w=400", categoria: "sandwiches", rating: 4.9, tiempo: "12 mins" },
+        { id: 28, nombre: "Philly Cheese Steak", descripcion: "Tiras de res, cebolla caramelizada y extra queso fundido", precio: 9.00, imagen: "https://images.unsplash.com/photo-1633436374961-09b92742047b?auto=format&fit=crop&q=80&w=400", categoria: "sandwiches", rating: 4.7, tiempo: "15 mins" }
+    ];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        auth.onAuthStateChanged(user => {
+            const btnLogin = document.getElementById('btn-login');
+            const btnAdmin = document.getElementById('btn-admin');
+            
+            if (user) {
+                usuarioActual = user;
+                btnLogin.textContent = 'Cerrar Sesión';
+                btnLogin.onclick = () => cerrarSesion();
+                
+                // Muestra siempre el admin para pruebas
+                btnAdmin.classList.remove('hidden');
+                isAdmin = true;
+            } else {
+                usuarioActual = null;
+                isAdmin = false;
+                btnLogin.textContent = 'Login';
+                btnLogin.onclick = () => mostrarVista('login');
+                btnAdmin.classList.add('hidden');
+            }
+        });
+
+        // ESTA ES LA MAGIA NUEVA: Descarga los productos de Firebase al cargar la página
+        cargarProductosDeFirebase();
+
+        mostrarVista('home');
+        
+        const carritoGuardado = localStorage.getItem('carrito');
+        if (carritoGuardado) {
+            carrito = JSON.parse(carritoGuardado);
+            actualizarContadorCarrito();
+        }
+    });
+
+    // FUNCIÓN PARA LEER DE FIREBASE
+    function cargarProductosDeFirebase() {
+        db.collection('productos').get().then((querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                productosData.push({
+                    id: doc.id,
+                    nombre: data.nombre,
+                    descripcion: data.descripcion,
+                    precio: data.precio,
+                    imagen: data.imagen,
+                    tiempo: data.tiempo,
+                    categoria: data.categoria,
+                    rating: data.rating || 5.0
+                });
+            });
+            console.log("¡Productos descargados de la nube con éxito!");
+            renderListaAdmin();
+        }).catch((error) => {
+            console.error("Error al leer de Firebase. Revisa las reglas de seguridad:", error);
+        });
+    }
+
+    function mostrarVista(vistaId) {
+        document.querySelectorAll('.vista').forEach(vista => vista.classList.remove('activa'));
+        const vista = document.getElementById(`vista-${vistaId}`);
+        if (vista) {
+            vista.classList.add('activa');
+            vista.classList.add('fade-in');
+        }
+        
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+            if (link.dataset.vista === vistaId || (vistaId === 'productos' && link.dataset.vista === 'menu')) {
+                link.classList.add('active');
+            }
+        });
+
+        const footer = document.getElementById('footer-principal');
+        const vistasConFooter = ['home', 'menu', 'productos', 'ofertas', 'contacto', 'historia', 'blog', 'delivery', 'reserva'];
+        if(footer) footer.style.display = vistasConFooter.includes(vistaId) ? 'block' : 'none';
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function filtrarCategoria(categoria, nombreCategoria) {
+        const productosContainer = document.getElementById('productos-container');
+        productosContainer.innerHTML = '';
+        document.getElementById('titulo-categoria').textContent = nombreCategoria;
+
+        const productosFiltrados = categoria === 'todos' ? productosData : productosData.filter(p => p.categoria === categoria);
+        
+        if (productosFiltrados.length === 0) {
+            productosContainer.innerHTML = `<div class="col-span-3 text-center py-10"><p class="text-gray-500 text-xl">No hay productos aquí</p></div>`;
+            return mostrarVista('productos');
+        }
+
+        productosFiltrados.forEach(producto => {
+            productosContainer.innerHTML += `
+                <div class="menu-card bg-white p-8 rounded-[3rem] card-shadow relative group">
+                    <button class="like-btn absolute top-6 right-6" onclick="toggleLike(this,'${producto.nombre}')">❤️</button>
+                    <div class="overflow-hidden rounded-3xl mb-8 h-48">
+                        <img src="${producto.imagen}" alt="${producto.nombre}" class="w-full h-full object-cover producto-imagen">
+                    </div>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-yellow-500 font-bold">★ ${producto.rating}</span>
+                        <span class="text-gray-400 text-sm">${producto.tiempo}</span>
+                    </div>
+                    <h3 class="text-2xl font-black mb-2 italic">${producto.nombre}</h3>
+                    <p class="text-gray-500 mb-4 h-12 overflow-hidden">${producto.descripcion}</p>
+                    <div class="flex justify-between items-center mt-4">
+                        <span class="text-3xl font-black text-spice-orange">$${producto.precio.toFixed(2)}</span>
+                        <button onclick="agregarAlCarrito('${producto.nombre}',${producto.precio})" class="bg-gray-900 text-white p-4 rounded-2xl hover:bg-spice-orange transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        </button>
+                    </div>
+                </div>`;
+        });
+        mostrarVista('productos');
+    }
+
+    function abrirCarrito() { renderCarrito(); mostrarVista('carrito'); }
+    function agregarAlCarrito(nombre, precio) { carrito.push({ nombre, precio, cantidad: 1 }); actualizarContadorCarrito(); guardarCarrito(); mostrarToast(`${nombre} agregado`); }
+    function actualizarContadorCarrito() { document.getElementById('carrito-contador').textContent = carrito.reduce((acc, item) => acc + item.cantidad, 0); }
+    function guardarCarrito() { localStorage.setItem('carrito', JSON.stringify(carrito)); }
+    
+    function renderCarrito() {
+        const lista = document.getElementById('lista-carrito');
+        if (carrito.length === 0) {
+            document.getElementById('carrito-vacio').classList.remove('hidden');
+            document.getElementById('resumen-carrito').classList.add('hidden');
+            lista.innerHTML = ''; return;
+        }
+        document.getElementById('carrito-vacio').classList.add('hidden');
+        document.getElementById('resumen-carrito').classList.remove('hidden');
+        
+        let html = '', subtotal = 0;
+        carrito.forEach((item, index) => {
+            subtotal += item.precio * item.cantidad;
+            html += `<div class="bg-white rounded-2xl p-6 card-shadow flex justify-between"><div><h3 class="font-bold">${item.nombre}</h3><p class="text-gray-500">$${item.precio.toFixed(2)} x ${item.cantidad}</p></div><div class="flex items-center space-x-4"><span class="font-black text-spice-orange">$${(item.precio*item.cantidad).toFixed(2)}</span><button onclick="eliminarDelCarrito(${index})" class="text-gray-400 hover:text-red-500">X</button></div></div>`;
+        });
+        lista.innerHTML = html;
+        document.getElementById('subtotal-carrito').textContent = `$${subtotal.toFixed(2)}`;
+        document.getElementById('total-carrito').textContent = `$${subtotal.toFixed(2)}`;
+    }
+    
+    function eliminarDelCarrito(index) { carrito.splice(index, 1); renderCarrito(); actualizarContadorCarrito(); guardarCarrito(); }
+    function realizarPedido() {
+        if (!usuarioActual) return mostrarToast('Debes iniciar sesión'), mostrarVista('login');
+        db.collection('pedidos').add({ userId: usuarioActual.uid, productos: carrito, total: carrito.reduce((a, b) => a + (b.precio * b.cantidad), 0), estado: 'pendiente' })
+          .then(() => { carrito = []; actualizarContadorCarrito(); guardarCarrito(); mostrarToast('¡Pedido realizado!'); mostrarVista('home'); });
+    }
+
+    function validarLogin(e) { e.preventDefault(); auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-password').value).then(() => { mostrarToast('¡Ingreso exitoso!'); mostrarVista('home'); }).catch(() => mostrarToast('Error credenciales')); }
+    function registrarse(e) { e.preventDefault(); auth.createUserWithEmailAndPassword(document.getElementById('email-registro').value, document.getElementById('password-registro').value).then(c => { db.collection('usuarios').doc(c.user.uid).set({ nombre: document.getElementById('nombre-registro').value, email: c.user.email }); mostrarToast('¡Cuenta creada!'); mostrarVista('home'); }); }
+    function cerrarSesion() { auth.signOut().then(() => { mostrarToast('Sesión cerrada'); mostrarVista('home'); }); }
+    function togglePasswordVisibility() { const i = document.getElementById('login-password'); i.type = i.type === 'password' ? 'text' : 'password'; }
+    
+    // --- NUEVAS FUNCIONES DE ADMINISTRACIÓN ---
+    let editandoId = null; // Variable para saber si estamos creando o editando
+
+    function renderListaAdmin() {
+        const contenedor = document.getElementById('lista-productos-admin');
+        if (!contenedor) return;
+        contenedor.innerHTML = '';
+        
+        productosData.forEach(p => {
+            contenedor.innerHTML += `
+            <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+                <div class="flex items-center gap-4">
+                    <img src="${p.imagen}" class="w-14 h-14 rounded-xl object-cover">
+                    <div>
+                        <p class="font-bold text-gray-800">${p.nombre}</p>
+                        <p class="text-xs text-gray-400">$${p.precio} | ${p.categoria}</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="cargarEdicion('${p.id}')" class="bg-blue-50 text-blue-500 p-2 rounded-lg hover:bg-blue-100 transition" title="Editar">✏️</button>
+                    <button onclick="eliminarProducto('${p.id}')" class="bg-red-50 text-red-500 p-2 rounded-lg hover:bg-red-100 transition" title="Eliminar">🗑️</button>
+                </div>
+            </div>`;
+        });
+    }
+
+    function cargarEdicion(id) {
+        // Buscamos el producto por su ID
+        const p = productosData.find(prod => prod.id == id);
+        if (!p) return;
+
+        editandoId = p.id;
+        
+        // Llenamos el formulario con los datos actuales
+        document.getElementById('admin-prod-nombre').value = p.nombre;
+        document.getElementById('admin-prod-desc').value = p.descripcion;
+        document.getElementById('admin-prod-precio').value = p.precio;
+        document.getElementById('admin-prod-imagen').value = p.imagen;
+        document.getElementById('admin-prod-tiempo').value = p.tiempo;
+        document.getElementById('admin-prod-categoria').value = p.categoria;
+
+        // Cambiamos los textos del formulario para modo edición
+        document.getElementById('titulo-form-admin').textContent = "Editar Producto";
+        document.getElementById('btn-submit-admin').textContent = "Guardar Cambios";
+        document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
+    }
+
+    function cancelarEdicion() {
+        editandoId = null;
+        document.getElementById('form-agregar-producto').reset();
+        document.getElementById('titulo-form-admin').textContent = "Agregar Nuevo Producto";
+        document.getElementById('btn-submit-admin').textContent = "Agregar Producto";
+        document.getElementById('btn-cancelar-edicion').classList.add('hidden');
+    }
+
+    function eliminarProducto(id) {
+        if (!confirm("¿Seguro que deseas eliminar este producto permanentemente?")) return;
+
+        if (typeof id === 'string') {
+            // Eliminar de Firebase
+            db.collection('productos').doc(id).delete().then(() => {
+                productosData = productosData.filter(p => p.id !== id);
+                renderListaAdmin();
+                mostrarToast("Producto eliminado de la nube");
+            }).catch(e => mostrarToast("Error al eliminar"));
+        } else {
+            // Eliminar de los datos locales (los que vienen por defecto)
+            productosData = productosData.filter(p => p.id !== id);
+            renderListaAdmin();
+            mostrarToast("Producto base ocultado");
+        }
+    }
+
+    function guardarProductoAdmin(e) {
+        e.preventDefault();
+        const nProd = { 
+            nombre: document.getElementById('admin-prod-nombre').value, 
+            descripcion: document.getElementById('admin-prod-desc').value, 
+            precio: parseFloat(document.getElementById('admin-prod-precio').value), 
+            imagen: document.getElementById('admin-prod-imagen').value, 
+            tiempo: document.getElementById('admin-prod-tiempo').value, 
+            categoria: document.getElementById('admin-prod-categoria').value, 
+            rating: 5.0 
+        };
+
+        if (editandoId) {
+            // MODO EDICIÓN
+            if (typeof editandoId === 'string') {
+                db.collection('productos').doc(editandoId).update(nProd).then(() => {
+                    const index = productosData.findIndex(p => p.id === editandoId);
+                    productosData[index] = { ...nProd, id: editandoId };
+                    mostrarToast('¡Producto actualizado en la nube!');
+                    cancelarEdicion();
+                    renderListaAdmin();
+                }).catch(error => mostrarToast('Error al actualizar'));
+            } else {
+                const index = productosData.findIndex(p => p.id === editandoId);
+                productosData[index] = { ...nProd, id: editandoId };
+                mostrarToast('¡Producto base actualizado!');
+                cancelarEdicion();
+                renderListaAdmin();
+            }
+        } else {
+            // MODO CREACIÓN
+            db.collection('productos').add(nProd).then((docRef) => { 
+                nProd.id = docRef.id;
+                productosData.push(nProd);
+                mostrarToast('¡Producto guardado permanentemente!'); 
+                e.target.reset(); 
+                renderListaAdmin();
+            }).catch((error) => { 
+                console.error(error);
+                mostrarToast('Error al guardar. Revisa Firebase.'); 
+            });
+        }
+    }
+
+    // --- FUNCIONES EXTRA EXISTENTES ---
+    function toggleLike(btn, nombre) { btn.textContent = btn.textContent === '❤️' ? '🤍' : '❤️'; mostrarToast(`Favoritos actualizado`); }
+    function enviarContacto(e) { e.preventDefault(); mostrarToast('Mensaje enviado'); e.target.reset(); }
+    function abrirModalProceso() { document.getElementById('modal-proceso').classList.add('abierto'); }
+    function cerrarModalProceso(e) { if(!e || e.target.id === 'modal-proceso') document.getElementById('modal-proceso').classList.remove('abierto'); }
+    function mostrarToast(msg) { const t = document.getElementById('toast'); document.getElementById('toast-msg').textContent = msg; t.classList.remove('hidden'); t.classList.add('mostrar'); setTimeout(() => { t.classList.remove('mostrar'); setTimeout(() => t.classList.add('hidden'), 300); }, 3000); }
+</script>
+</script>
+</body>
+</html>
