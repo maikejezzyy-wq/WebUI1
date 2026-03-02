@@ -457,7 +457,7 @@
             <div class="bg-white rounded-[2.5rem] p-10 card-shadow">
                 <h2 class="text-2xl font-black mb-6">Tus Productos</h2>
                 <div id="lista-productos-admin" class="overflow-y-auto max-h-[500px] pr-2 space-y-4">
-                    </div>
+                </div>
             </div>
         </div>
 
@@ -469,7 +469,7 @@
     <div class="container mx-auto px-6 grid md:grid-cols-4 gap-12 mb-16">
         <div>
             <button onclick="mostrarVista('home')" class="flex items-center transition hover:opacity-80 mb-6">
-                <img src="https://i.postimg.cc/jjG1kFWT/Logo-Mr-Dwich.jpg" alt="Logo de Mr Dwich" class="h-10 w-auto object-contain">
+                <img src="https://i.postimg.cc/YqP8YCPc/MR.png" alt="Logo de Mr Dwich" class="h-10 w-auto object-contain">
             </button>
             <p class="text-gray-500 mb-8 leading-relaxed">Conectando los mejores sabores del mundo directamente con tu hogar.</p>
             <div class="flex space-x-4">
@@ -542,16 +542,11 @@
         { id: 1, nombre: "Clásica Spice", descripcion: "Carne de res, lechuga, tomate, queso", precio: 12.50, imagen: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=400", categoria: "hamburguesa", rating: 4.8, tiempo: "15 mins" },
         { id: 2, nombre: "Doble Bacon", descripcion: "Doble carne, tocino crujiente, queso cheddar", precio: 15.00, imagen: "https://images.unsplash.com/photo-1594221708779-94832f4320d1?auto=format&fit=crop&q=80&w=400", categoria: "hamburguesa", rating: 4.9, tiempo: "18 mins" },
         { id: 3, nombre: "Pollo Crispy", descripcion: "Pechuga empanizada, mayonesa de ajo", precio: 11.00, imagen: "https://images.unsplash.com/photo-1615719413546-198b25453f85?auto=format&fit=crop&q=80&w=400", categoria: "hamburguesa", rating: 4.7, tiempo: "15 mins" },
-        
         { id: 6, nombre: "Margarita XL", descripcion: "Salsa de tomate, mozzarella, albahaca", precio: 15.00, imagen: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=400", categoria: "pizza", rating: 4.9, tiempo: "25 mins" },
         { id: 7, nombre: "Pepperoni Plus", descripcion: "Extra queso y doble porción de pepperoni", precio: 17.00, imagen: "https://images.unsplash.com/photo-1628840042765-356cda07504e?auto=format&fit=crop&q=80&w=400", categoria: "pizza", rating: 4.8, tiempo: "25 mins" },
-        
         { id: 11, nombre: "Limonada de Coco", descripcion: "Refrescante limonada con crema de coco natural", precio: 4.50, imagen: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=400", categoria: "bebidas", rating: 4.8, tiempo: "5 mins" },
-        
         { id: 16, nombre: "Papas Fritas Clásicas", descripcion: "Crujientes, doradas y con el toque exacto de sal", precio: 4.00, imagen: "https://images.unsplash.com/photo-1576107232684-1279f390859f?auto=format&fit=crop&q=80&w=400", categoria: "snacks", rating: 4.8, tiempo: "10 mins" },
-        
         { id: 21, nombre: "Brownie con Helado", descripcion: "Brownie caliente de chocolate oscuro con helado de vainilla", precio: 6.00, imagen: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&q=80&w=400", categoria: "postres", rating: 4.9, tiempo: "10 mins" },
-        
         { id: 26, nombre: "Sándwich Cubano", descripcion: "Cerdo asado, jamón, queso suizo, mostaza y pepinillos", precio: 8.50, imagen: "https://images.unsplash.com/photo-1628191137573-dee64e727614?auto=format&fit=crop&q=80&w=400", categoria: "sandwiches", rating: 4.8, tiempo: "10 mins" },
         { id: 27, nombre: "Pollo Pesto", descripcion: "Pechuga a la plancha, salsa pesto, tomate y mozzarella", precio: 7.50, imagen: "https://images.unsplash.com/photo-1619881589316-56c7f9e6b587?auto=format&fit=crop&q=80&w=400", categoria: "sandwiches", rating: 4.9, tiempo: "12 mins" },
         { id: 28, nombre: "Philly Cheese Steak", descripcion: "Tiras de res, cebolla caramelizada y extra queso fundido", precio: 9.00, imagen: "https://images.unsplash.com/photo-1633436374961-09b92742047b?auto=format&fit=crop&q=80&w=400", categoria: "sandwiches", rating: 4.7, tiempo: "15 mins" }
@@ -579,9 +574,7 @@
             }
         });
 
-        // ESTA ES LA MAGIA NUEVA: Descarga los productos de Firebase al cargar la página
         cargarProductosDeFirebase();
-
         mostrarVista('home');
         
         const carritoGuardado = localStorage.getItem('carrito');
@@ -591,26 +584,28 @@
         }
     });
 
-    // FUNCIÓN PARA LEER DE FIREBASE
     function cargarProductosDeFirebase() {
         db.collection('productos').get().then((querySnapshot) => {
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                productosData.push({
-                    id: doc.id,
-                    nombre: data.nombre,
-                    descripcion: data.descripcion,
-                    precio: data.precio,
-                    imagen: data.imagen,
-                    tiempo: data.tiempo,
-                    categoria: data.categoria,
-                    rating: data.rating || 5.0
-                });
+                // Verificamos si ya existe para no duplicar en caso de que su ID ya coincida
+                if (!productosData.find(p => String(p.id) === doc.id)) {
+                    productosData.push({
+                        id: doc.id,
+                        nombre: data.nombre,
+                        descripcion: data.descripcion,
+                        precio: data.precio,
+                        imagen: data.imagen,
+                        tiempo: data.tiempo,
+                        categoria: data.categoria,
+                        rating: data.rating || 5.0
+                    });
+                }
             });
             console.log("¡Productos descargados de la nube con éxito!");
             renderListaAdmin();
         }).catch((error) => {
-            console.error("Error al leer de Firebase. Revisa las reglas de seguridad:", error);
+            console.error("Error al leer de Firebase:", error);
         });
     }
 
@@ -710,7 +705,7 @@
     function togglePasswordVisibility() { const i = document.getElementById('login-password'); i.type = i.type === 'password' ? 'text' : 'password'; }
     
     // --- NUEVAS FUNCIONES DE ADMINISTRACIÓN ---
-    let editandoId = null; // Variable para saber si estamos creando o editando
+    let editandoId = null;
 
     function renderListaAdmin() {
         const contenedor = document.getElementById('lista-productos-admin');
@@ -736,13 +731,10 @@
     }
 
     function cargarEdicion(id) {
-        // Buscamos el producto por su ID
         const p = productosData.find(prod => prod.id == id);
         if (!p) return;
 
         editandoId = p.id;
-        
-        // Llenamos el formulario con los datos actuales
         document.getElementById('admin-prod-nombre').value = p.nombre;
         document.getElementById('admin-prod-desc').value = p.descripcion;
         document.getElementById('admin-prod-precio').value = p.precio;
@@ -750,7 +742,6 @@
         document.getElementById('admin-prod-tiempo').value = p.tiempo;
         document.getElementById('admin-prod-categoria').value = p.categoria;
 
-        // Cambiamos los textos del formulario para modo edición
         document.getElementById('titulo-form-admin').textContent = "Editar Producto";
         document.getElementById('btn-submit-admin').textContent = "Guardar Cambios";
         document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
@@ -767,19 +758,19 @@
     function eliminarProducto(id) {
         if (!confirm("¿Seguro que deseas eliminar este producto permanentemente?")) return;
 
-        if (typeof id === 'string') {
-            // Eliminar de Firebase
-            db.collection('productos').doc(id).delete().then(() => {
-                productosData = productosData.filter(p => p.id !== id);
-                renderListaAdmin();
-                mostrarToast("Producto eliminado de la nube");
-            }).catch(e => mostrarToast("Error al eliminar"));
-        } else {
-            // Eliminar de los datos locales (los que vienen por defecto)
-            productosData = productosData.filter(p => p.id !== id);
+        const idStr = String(id);
+        
+        // Intentamos borrar siempre de Firebase
+        db.collection('productos').doc(idStr).delete().then(() => {
+            productosData = productosData.filter(p => p.id != id);
+            renderListaAdmin();
+            mostrarToast("Producto eliminado de la nube");
+        }).catch(e => {
+            console.log("No existía en la nube, se eliminará localmente");
+            productosData = productosData.filter(p => p.id != id);
             renderListaAdmin();
             mostrarToast("Producto base ocultado");
-        }
+        });
     }
 
     function guardarProductoAdmin(e) {
@@ -796,21 +787,20 @@
 
         if (editandoId) {
             // MODO EDICIÓN
-            if (typeof editandoId === 'string') {
-                db.collection('productos').doc(editandoId).update(nProd).then(() => {
-                    const index = productosData.findIndex(p => p.id === editandoId);
-                    productosData[index] = { ...nProd, id: editandoId };
-                    mostrarToast('¡Producto actualizado en la nube!');
-                    cancelarEdicion();
-                    renderListaAdmin();
-                }).catch(error => mostrarToast('Error al actualizar'));
-            } else {
-                const index = productosData.findIndex(p => p.id === editandoId);
-                productosData[index] = { ...nProd, id: editandoId };
-                mostrarToast('¡Producto base actualizado!');
+            const idStr = String(editandoId);
+            // Usamos set con merge para que se cree el documento si era un producto local
+            db.collection('productos').doc(idStr).set(nProd, { merge: true }).then(() => {
+                const index = productosData.findIndex(p => p.id == editandoId);
+                if (index !== -1) {
+                    productosData[index] = { ...nProd, id: idStr };
+                }
+                mostrarToast('¡Producto actualizado en la nube!');
                 cancelarEdicion();
                 renderListaAdmin();
-            }
+            }).catch(error => {
+                console.error(error);
+                mostrarToast('Error al actualizar. Revisa Firebase.');
+            });
         } else {
             // MODO CREACIÓN
             db.collection('productos').add(nProd).then((docRef) => { 
@@ -832,7 +822,6 @@
     function abrirModalProceso() { document.getElementById('modal-proceso').classList.add('abierto'); }
     function cerrarModalProceso(e) { if(!e || e.target.id === 'modal-proceso') document.getElementById('modal-proceso').classList.remove('abierto'); }
     function mostrarToast(msg) { const t = document.getElementById('toast'); document.getElementById('toast-msg').textContent = msg; t.classList.remove('hidden'); t.classList.add('mostrar'); setTimeout(() => { t.classList.remove('mostrar'); setTimeout(() => t.classList.add('hidden'), 300); }, 3000); }
-</script>
 </script>
 </body>
 </html>
