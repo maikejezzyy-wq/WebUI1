@@ -588,24 +588,35 @@
         db.collection('productos').get().then((querySnapshot) => {
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                // Verificamos si ya existe para no duplicar en caso de que su ID ya coincida
-                if (!productosData.find(p => String(p.id) === doc.id)) {
-                    productosData.push({
-                        id: doc.id,
-                        nombre: data.nombre,
-                        descripcion: data.descripcion,
-                        precio: data.precio,
-                        imagen: data.imagen,
-                        tiempo: data.tiempo,
-                        categoria: data.categoria,
-                        rating: data.rating || 5.0
-                    });
+                
+                // Buscamos si el producto ya existe en nuestra lista local
+                const index = productosData.findIndex(p => String(p.id) === doc.id);
+                
+                // Preparamos el producto con los datos frescos de la nube
+                const productoNube = {
+                    id: doc.id,
+                    nombre: data.nombre,
+                    descripcion: data.descripcion,
+                    precio: data.precio,
+                    imagen: data.imagen,
+                    tiempo: data.tiempo,
+                    categoria: data.categoria,
+                    rating: data.rating || 5.0
+                };
+
+                if (index !== -1) {
+                    // FIX: Si ya existe (era un producto base), lo SOBRESCRIBIMOS con los datos de Firebase
+                    productosData[index] = productoNube;
+                } else {
+                    // Si no existe, es un producto totalmente nuevo, lo agregamos a la lista
+                    productosData.push(productoNube);
                 }
             });
             console.log("¡Productos descargados de la nube con éxito!");
-            renderListaAdmin();
+            renderListaAdmin(); // Actualizamos la vista de la tabla
         }).catch((error) => {
             console.error("Error al leer de Firebase:", error);
+            mostrarToast("Error al cargar datos. Revisa la consola.");
         });
     }
 
